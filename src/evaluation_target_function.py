@@ -1,7 +1,7 @@
-import gensim
 import itertools
 import random
 import numpy as np
+import torch
 
 msigdb_file = "msigdb.v6.1.symbols.gmt"  # Update with your msigdb file address
 pathwayList = []
@@ -14,29 +14,41 @@ with open(msigdb_file, 'r') as readFile:
         pathwayList.append(line)
 readFile.close()
 
-def targetFunc(emb_w2v_file):
-    geneEmbedList = []
-    with open(emb_w2v_file, 'r') as file:
+def load_word_vectors(file_name):
+    word_vectors = {}
+    with open(file_name, 'r') as file:
         for line in file:
-            if len(line.split(" ")) == 2:  # first line
+            if len(line.split()) == 2:  # Skip the header line
                 continue
-            geneEmbedList.append((line.split(" ")[0]))
-    file.close()
+            parts = line.strip().split()
+            word = parts[0]
+            vector = [float(val) for val in parts[1:]]
+            word_vectors[word] = torch.tensor(vector)
+    return word_vectors
 
-    model = gensim.models.KeyedVectors.load_word2vec_format(emb_w2v_file)
+def similarity(vector1, vector2):
+    dot_product = torch.dot(vector1, vector2)
+    norm1 = torch.norm(vector1)
+    norm2 = torch.norm(vector2)
+    return dot_product / (norm1 * norm2)
+
+def targetFunc(emb_w2v_file):
+    geneEmbedDict = load_word_vectors(emb_w2v_file)
+
     paths_array = []  # Numerator in target function
 
     for pathway in pathwayList:
-        geneList = list()
+        geneList = []
         path_arr = []
         tmpList = pathway.split("\t")
         n = len(tmpList)
         for i in range(2, n):
-            if tmpList[i] in geneEmbedList:
-                geneList.append(tmpList[i])
+            gene = tmpList[i]
+            if gene in geneEmbedDict:
+                geneList.append(gene)
         genePairs = list(itertools.combinations(geneList, 2))
         for pair in genePairs:
-            sim = model.wv.similarity(pair[0], pair[1])
+            sim = similarity(geneEmbedDict[pair[0]], geneEmbedDict[pair[1]])
             path_arr.append(sim)
         paths_array.append(sum(path_arr) / len(path_arr))
         tmpList.clear()
@@ -44,10 +56,10 @@ def targetFunc(emb_w2v_file):
 
     randArray = []  # Denominator in target function
     random.seed(35)
-    random.shuffle(geneEmbedList)
-    genePairs = list(itertools.combinations(geneEmbedList[:1000], 2))
+    random.shuffle(list(geneEmbedDict.keys()))
+    genePairs = list(itertools.combinations(list(geneEmbedDict.keys())[:1000], 2))
     for pair in genePairs:
-        sim = model.wv.similarity(pair[0], pair[1])
+        sim = similarity(geneEmbedDict[pair[0]], geneEmbedDict[pair[1]])
         randArray.append(sim)
     genePairs.clear()
     print("------------")

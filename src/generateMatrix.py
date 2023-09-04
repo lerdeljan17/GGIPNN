@@ -1,19 +1,24 @@
-import torch
 import numpy as np
+from gensim.models.keyedvectors import KeyedVectors
+
+#convert binary gene2vec to matrix txt
 
 def load_embeddings(file_name):
-    model = torch.load(file_name, map_location=torch.device('cpu'))  # Load the PyTorch model
-    word_vectors = model['vectors']
-    vocabulary = model['vocabulary']
-    return word_vectors, vocabulary
+    model = KeyedVectors.load(file_name)
+    wordVector = model.wv
+    vocabulary, wv = zip(*[[word, wordVector[word]] for word, vocab_obj in wordVector.vocab.items()])
+    return np.asarray(wv), vocabulary
 
-def outputTxt(embeddings_file):
-    embeddings_file = embeddings_file  # PyTorch model file address
-    word_vectors, vocabulary = load_embeddings(embeddings_file)
-    matrix_txt_file = embeddings_file + ".txt"  # Matrix txt file address
-
+def outputTxt (embeddings_file):
+    embeddings_file = embeddings_file  # gene2vec file address
+    wv, vocabulary = load_embeddings(embeddings_file)
+    index = 0
+    matrix_txt_file = embeddings_file+".txt"  # gene2vec matrix txt file address
     with open(matrix_txt_file, 'w') as out:
-        for word, vector in zip(vocabulary, word_vectors):
-            out.write(str(word) + "\t")
-            out.write(" ".join(str(e) for e in vector.tolist()))
+        for ele in wv[:]:
+            out.write(str(vocabulary[index]) + "\t")
+            index = index + 1
+            for elee in ele:
+                out.write(str(elee) + " ")
             out.write("\n")
+    out.close()

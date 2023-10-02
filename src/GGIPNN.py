@@ -63,16 +63,16 @@ def train(model, x_train, y_train, batch_size, num_epochs):
             if (i + 1) % 100 == 0:
                 print(f"Epoch {epoch + 1}/{num_epochs}, Batch {i + 1}/{len(x_train)}, Loss: {loss.item()}")
 
-# Example usage
-if __name__ == "__main__":
-    # Sample data
-    sequence_length = 50
-    num_classes = 10
-    vocab_size = 10000
-    embedding_size = 200
-    x_train = torch.randint(0, vocab_size, (1000, sequence_length))
-    y_train = torch.randint(0, num_classes, (1000,))
+# # Example usage
+# if __name__ == "__main__":
+#     # Sample data
+#     sequence_length = 50
+#     num_classes = 10
+#     vocab_size = 10000
+#     embedding_size = 200
+#     x_train = torch.randint(0, vocab_size, (1000, sequence_length))
+#     y_train = torch.randint(0, num_classes, (1000,))
 
-    # Create and train the model
-    model = GGIPNN(sequence_length, num_classes, vocab_size, embedding_size)
-    train(model, x_train, y_train, batch_size=64, num_epochs=5)
+#     # Create and train the model
+#     model = GGIPNN(sequence_length, num_classes, vocab_size, embedding_size)
+#     train(model, x_train, y_train, batch_size=64, num_epochs=5)

@@ -8,6 +8,7 @@ import random
 import os
 import time
 import datetime
+from GGIPNN import GGIPNN
 import GGIPNN_util as NN_util
 
 # Parameters
@@ -31,7 +32,7 @@ num_checkpoints = 5
 # Misc Parameters
 allow_soft_placement = True
 log_device_placement = False
-use_pre_trained_gene2vec = True  # if False, the embedding layer will be initialized randomly
+use_pre_trained_gene2vec = False  # if False, the embedding layer will be initialized randomly
 train_embedding = False  # if True, the embedding layer will be trained during the training
 
 # Data loading data
@@ -91,23 +92,6 @@ print("total test size: " + str(len(y_test)))
 print("training start!")
 
 # Define the GGIPNN model
-class GGIPNN(nn.Module):
-    def __init__(self, sequence_length, num_classes, vocab_size, embedding_size, l2_lambda):
-        super(GGIPNN, self).__init__()
-        self.embedding = nn.Embedding(vocab_size, embedding_size)
-        self.fc1 = nn.Linear(embedding_size, 256)
-        self.fc2 = nn.Linear(256, num_classes)
-        self.dropout = nn.Dropout(p=dropout_keep_prob)
-
-    def forward(self, x):
-        x = self.embedding(x)
-        x = torch.mean(x, dim=1)  # Average pooling over the sequence length
-        x = self.fc1(x)
-        x = torch.relu(x)
-        x = self.dropout(x)
-        logits = self.fc2(x)
-        return logits
-
 model = GGIPNN(
     sequence_length=len(x_train[0]),
     num_classes=len(y_train[0]),
@@ -125,6 +109,7 @@ def train_step(x_batch, y_batch):
     model.train()
     optimizer.zero_grad()
     logits = model(x_batch)
+    logits = logits[0]  # Extract the tensor from the tuple
     loss = criterion(logits, torch.argmax(y_batch, dim=1))
     loss.backward()
     optimizer.step()
@@ -134,13 +119,14 @@ def dev_step(x_batch, y_batch):
     model.eval()
     with torch.no_grad():
         logits = model(x_batch)
+        logits = logits[0]  # Assuming logits is a tuple, extract the tensor
         loss = criterion(logits, torch.argmax(y_batch, dim=1))
         return loss.item()
 
 best_dev_loss = float('inf')
 
 for epoch in range(num_epochs):
-    batches = NN_util.batch_iter(list(zip(x_train, y_train)), batch_size, num_epochs=1)
+    batches = list(NN_util.batch_iter(list(zip(x_train, y_train)), batch_size, num_epochs=1))
     for batch in batches:
         x_batch, y_batch = zip(*batch)
         x_batch = torch.LongTensor(x_batch)
@@ -157,7 +143,7 @@ for epoch in range(num_epochs):
                 torch.save(model.state_dict(), "best_model.pt")
 
 # Load the best model
-model.load_state_dict(torch.load("best_model.pt"))
+# model.load_state_dict(torch.load("best_model.pt"))
 
 # Prediction
 model.eval()

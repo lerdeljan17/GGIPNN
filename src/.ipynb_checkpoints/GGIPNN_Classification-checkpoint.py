@@ -1,39 +1,31 @@
-import numpy as np
 import torch
-import torch.nn as nn
-import torch.optim as optim
-from torch.utils.data import DataLoader, TensorDataset
-from sklearn import metrics
+import numpy as np
+import GGIPNN as GGIPNN
+import GGIPNN_util as NN_util
 import random
 import os
 import time
 import datetime
-from GGIPNN import GGIPNN
-import GGIPNN_util as NN_util
+from sklearn import metrics
 
 # Parameters
 # ==================================================
 
 # Data loading params
-embedding_file = "../pre_trained_emb/gene2vec_dim_200_iter_9.txt"  # embedding file address, matrix txt file
+embedding_file = "../pre_trained_emb/gene2vec_dim_200_iter_9.txt"
 
 # Model Hyperparameters
-l2_reg_lambda = 0.0
+l2_reg_lambda = 0
 embedding_dimension = 200
 dropout_keep_prob = 0.5
 
 # Training parameters
-batch_size = 128
-num_epochs = 1
-evaluate_every = 200
-checkpoint_every = 1000
+batch_size = 64
+num_epochs = 10
+learning_rate = 0.001
+evaluate_every = 100
+checkpoint_every = 100
 num_checkpoints = 5
-
-# Misc Parameters
-allow_soft_placement = True
-log_device_placement = False
-use_pre_trained_gene2vec = False  # if False, the embedding layer will be initialized randomly
-train_embedding = False  # if True, the embedding layer will be trained during the training
 
 # Data loading data
 x_train_raw_f = open("../predictionData/train_text.txt", 'r')
@@ -91,82 +83,79 @@ print("total training size: " + str(len(y_train)))
 print("total test size: " + str(len(y_test)))
 print("training start!")
 
-# Define the GGIPNN model
-model = GGIPNN(
-    sequence_length=len(x_train[0]),
-    num_classes=len(y_train[0]),
+
+# Convert data to PyTorch tensors
+x_train = torch.LongTensor(x_train)
+y_train = torch.FloatTensor(y_train)
+x_dev = torch.LongTensor(x_dev)
+y_dev = torch.FloatTensor(y_dev)
+x_test = torch.LongTensor(x_test)
+y_test = torch.FloatTensor(y_test)
+
+# Model Training
+# ==================================================
+
+# Initialize model
+model = GGIPNN.GGIPNN(
+    sequence_length=x_train.shape[1],
+    num_classes=y_train.shape[1],
     vocab_size=len(all_text_voca),
     embedding_size=embedding_dimension,
+    hidden_dimension=100,
+    embedTrain=False,
     l2_lambda=l2_reg_lambda
 )
 
 # Loss and optimizer
-criterion = nn.CrossEntropyLoss()
-optimizer = optim.Adam(model.parameters(), lr=1e-3)
+criterion = torch.nn.BCEWithLogitsLoss()
+optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
 
-# Training loop
-def train_step(x_batch, y_batch):
-    model.train()
-    optimizer.zero_grad()
-    logits = model(x_batch)
-    logits = logits[0]  # Extract the tensor from the tuple
-    loss = criterion(logits, torch.argmax(y_batch, dim=1))
-    loss.backward()
-    optimizer.step()
-    return loss.item()
-
-def dev_step(x_batch, y_batch):
-    model.eval()
-    with torch.no_grad():
-        logits = model(x_batch)
-        logits = logits[0]  # Assuming logits is a tuple, extract the tensor
-        loss = criterion(logits, torch.argmax(y_batch, dim=1))
-        return loss.item()
-
-best_dev_loss = float('inf')
-
+# Train the model
+total_step = len(x_train) // batch_size + 1
 for epoch in range(num_epochs):
-    batches = list(NN_util.batch_iter(list(zip(x_train, y_train)), batch_size, num_epochs=1))
-    for batch in batches:
-        x_batch, y_batch = zip(*batch)
-        x_batch = torch.LongTensor(x_batch)
-        y_batch = torch.FloatTensor(y_batch)
-        train_loss = train_step(x_batch, y_batch)
-        current_step = (epoch * len(batches)) + (epoch + 1)
-        if current_step % evaluate_every == 0:
-            x_dev_tensor = torch.LongTensor(x_dev)
-            y_dev_tensor = torch.FloatTensor(y_dev)
-            dev_loss = dev_step(x_dev_tensor, y_dev_tensor)
-            print(f"Step {current_step}, Dev Loss: {dev_loss}")
-            if dev_loss < best_dev_loss:
-                best_dev_loss = dev_loss
-                torch.save(model.state_dict(), "best_model.pt")
+    for i in range(total_step):
+        # Get batch of data
+        start = i * batch_size
+        end = min((i + 1) * batch_size, len(x_train))
+        batch_x = x_train[start:end]
+        batch_y = y_train[start:end]
 
-# Load the best model
-# model.load_state_dict(torch.load("best_model.pt"))
+        # Forward pass
+        outputs = model(batch_x)
+        loss = criterion(outputs, batch_y)
 
-# Prediction
-model.eval()
-predictions_score_human_readable = []
+        # Backward and optimize
+        optimizer.zero_grad()
+        loss.backward()
+        optimizer.step()
 
-for x_test_batch in NN_util.batch_iter(x_test, batch_size, num_epochs):
-    x_test_batch_tensor = torch.LongTensor(x_test_batch)
-    # x_test_batch_tensor = torch.FloatTensor(x_test_batch)  # Convert to FloatTensor
-    with torch.no_grad():
-        logits = model(x_test_batch_tensor)
-    # batch_scores = [torch.softmax(logit, dim=1)[:, 1].tolist() for logit in logits]
-    batch_scores = [torch.softmax(logit.float(), dim=0).tolist() for logit in logits]
-    predictions_score_human_readable.extend(batch_scores)
+        # Print training progress
+        if (i + 1) % evaluate_every == 0:
+            # Evaluate model on validation set
+            with torch.no_grad():
+                dev_preds = model(x_dev)
+                dev_loss = criterion(dev_preds, y_dev)
+                dev_auc = metrics.roc_auc_score(y_dev, dev_preds)
+                print("Epoch [{}/{}], Step [{}/{}], Train Loss: {:.4f}, Dev Loss: {:.4f}, Dev AUC: {:.4f}"
+                  .format(epoch + 1, num_epochs, i + 1, total_step,
+                          loss.item(), dev_loss.item(), dev_auc))
 
-predicationGS = np.argmax(predicationGS, axis=1)
+        # Save the model checkpoint
+        if (i + 1) % checkpoint_every == 0:
+            checkpoint_path = os.path.join("checkpoints", "model_epoch{}_step{}.ckpt".format(epoch + 1, i + 1))
+            torch.save(model.state_dict(), checkpoint_path)
 
-yscore = predictions_score_human_readable
-ytrue = predicationGS
+# Test the model
+# ==================================================
 
-# print("Shape of ytrue:", np.array(ytrue).shape)
-# print("Shape of yscore:", np.array(yscore).shape)
+# Load the best checkpoint
+best_checkpoint = torch.load(os.path.join("checkpoints", "best_model.ckpt"))
+model.load_state_dict(best_checkpoint)
 
+# Evaluate the model on test set
+with torch.no_grad():
+    test_preds = model(x_test)
+    test_loss = criterion(test_preds, y_test)
+    test_auc = metrics.roc_auc_score(y_test, test_preds)
 
-print("-------------------")
-print("AUC score")
-print(metrics.roc_auc_score(np.array(ytrue), np.array(yscore)))
+print("Test Loss: {:.4f}, Test AUC: {:.4f}".format(test_loss.item(), test_auc))

@@ -151,15 +151,21 @@ predictions_score_human_readable = []
 
 for x_test_batch in NN_util.batch_iter(x_test, batch_size, num_epochs):
     x_test_batch_tensor = torch.LongTensor(x_test_batch)
+    # x_test_batch_tensor = torch.FloatTensor(x_test_batch)  # Convert to FloatTensor
     with torch.no_grad():
         logits = model(x_test_batch_tensor)
-    batch_scores = torch.softmax(logits, dim=1)[:, 1].tolist()
+    # batch_scores = [torch.softmax(logit, dim=1)[:, 1].tolist() for logit in logits]
+    batch_scores = [torch.softmax(logit.float(), dim=0).tolist() for logit in logits]
     predictions_score_human_readable.extend(batch_scores)
 
 predicationGS = np.argmax(predicationGS, axis=1)
 
 yscore = predictions_score_human_readable
 ytrue = predicationGS
+
+# print("Shape of ytrue:", np.array(ytrue).shape)
+# print("Shape of yscore:", np.array(yscore).shape)
+
 
 print("-------------------")
 print("AUC score")

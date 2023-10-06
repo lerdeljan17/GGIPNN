@@ -20,12 +20,18 @@ embedding_dimension = 200
 dropout_keep_prob = 0.5
 
 # Training parameters
-batch_size = 64
+batch_size = 128
 num_epochs = 10
 learning_rate = 0.001
-evaluate_every = 100
-checkpoint_every = 100
+evaluate_every = 200
+checkpoint_every = 1000
 num_checkpoints = 5
+
+# Misc Parameters
+# allow_soft_placement = True # TensorFlow can move operations to a different device 
+# log_device_placement = False
+use_pre_trained_gene2vec = False  # if False, the embedding layer will be initialized randomly
+train_embedding = True  # if True, the embedding layer will be trained during the training
 
 # Data loading data
 x_train_raw_f = open("../predictionData/train_text.txt", 'r')
@@ -85,12 +91,12 @@ print("training start!")
 
 
 # Convert data to PyTorch tensors
-x_train = torch.LongTensor(x_train)
-y_train = torch.FloatTensor(y_train)
-x_dev = torch.LongTensor(x_dev)
-y_dev = torch.FloatTensor(y_dev)
-x_test = torch.LongTensor(x_test)
-y_test = torch.FloatTensor(y_test)
+x_train = torch.LongTensor(np.array(x_train))
+y_train = torch.FloatTensor(np.array(y_train))
+x_dev = torch.LongTensor(np.array(x_dev))
+y_dev = torch.FloatTensor(np.array(y_dev))
+x_test = torch.LongTensor(np.array(x_test))
+y_test = torch.FloatTensor(np.array(y_test))
 
 # Model Training
 # ==================================================
@@ -102,7 +108,7 @@ model = GGIPNN.GGIPNN(
     vocab_size=len(all_text_voca),
     embedding_size=embedding_dimension,
     hidden_dimension=100,
-    embedTrain=False,
+    embedTrain=train_embedding,
     l2_lambda=l2_reg_lambda
 )
 
@@ -141,16 +147,18 @@ for epoch in range(num_epochs):
                           loss.item(), dev_loss.item(), dev_auc))
 
         # Save the model checkpoint
+        # print(f"i: {i+1}  ckp: {checkpoint_every} res: {(i + 1) % checkpoint_every == 0}")
         if (i + 1) % checkpoint_every == 0:
             checkpoint_path = os.path.join("checkpoints", "model_epoch{}_step{}.ckpt".format(epoch + 1, i + 1))
+            # print(f"{checkpoint_path}")
             torch.save(model.state_dict(), checkpoint_path)
 
 # Test the model
 # ==================================================
 
 # Load the best checkpoint
-best_checkpoint = torch.load(os.path.join("checkpoints", "best_model.ckpt"))
-model.load_state_dict(best_checkpoint)
+# best_checkpoint = torch.load(os.path.join("checkpoints", "best_model.ckpt"))
+# model.load_state_dict(best_checkpoint)
 
 # Evaluate the model on test set
 with torch.no_grad():

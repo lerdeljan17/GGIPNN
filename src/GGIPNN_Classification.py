@@ -30,7 +30,7 @@ num_checkpoints = 5
 # Misc Parameters
 # allow_soft_placement = True # TensorFlow can move operations to a different device 
 # log_device_placement = False
-use_pre_trained_gene2vec = False  # if False, the embedding layer will be initialized randomly
+use_pre_trained_gene2vec = True  # if False, the embedding layer will be initialized randomly
 train_embedding = True  # if True, the embedding layer will be trained during the training
 
 # Data loading data
@@ -109,8 +109,10 @@ model = GGIPNN.GGIPNN(
     embedding_size=embedding_dimension,
     hidden_dimension=100,
     embedTrain=train_embedding,
-    l2_lambda=l2_reg_lambda
-)
+    l2_lambda=l2_reg_lambda,
+    use_pre_trained_gene2vec = use_pre_trained_gene2vec,
+    all_text_voca = all_text_voca,
+    embedding_file = embedding_file)
 
 # Loss and optimizer
 criterion = torch.nn.BCEWithLogitsLoss()

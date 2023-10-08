@@ -14,8 +14,16 @@ class GGIPNN(nn.Module):
 
         super(GGIPNN, self).__init__()
 
-        # Embedding layer
+       # Define the embedding layer
         self.embedding = nn.Embedding(vocab_size, embedding_size)
+
+        # Initialize the embedding weights (similar to random_uniform in TensorFlow)
+        if not embedTrain:
+            self.embedding.weight.requires_grad = False
+        else:
+            self.embedding.weight.requires_grad = True
+        nn.init.uniform_(self.embedding.weight, -1.0, 1.0)
+            
         # Load pre-trained gene embeddings if specified
         if use_pre_trained_gene2vec:
             vocabulary = all_text_voca

@@ -7,6 +7,7 @@ import os
 import time
 import datetime
 from sklearn import metrics
+import matplotlib.pyplot as plt
 
 # Parameters
 # ==================================================
@@ -163,9 +164,45 @@ for epoch in range(num_epochs):
 # model.load_state_dict(best_checkpoint)
 
 # Evaluate the model on test set
+# with torch.no_grad():
+#     test_preds = model(x_test)
+#     test_loss = criterion(test_preds, y_test)
+#     fpr, tpr, thresholds = metrics.roc_curve(y_test, test_preds)
+#     test_auc = metrics.roc_auc_score(y_test, test_preds)
+
+# print("Test Loss: {:.4f}, Test AUC: {:.4f}".format(test_loss.item(), test_auc))
+# print(f"fpr: {fpr}, tpr : {tpr}, thresholds : {thresholds}")
+
+# Evaluate the model on the test set
 with torch.no_grad():
     test_preds = model(x_test)
     test_loss = criterion(test_preds, y_test)
-    test_auc = metrics.roc_auc_score(y_test, test_preds)
 
-print("Test Loss: {:.4f}, Test AUC: {:.4f}".format(test_loss.item(), test_auc))
+    # Compute ROC curve and AUC for each class
+    fpr = dict()
+    tpr = dict()
+    roc_auc = dict()
+    for i in range(y_test.shape[1]):  # Assuming multi-label classification with y_test having multiple columns
+        fpr[i], tpr[i], _ = metrics.roc_curve(y_test[:, i], test_preds[:, i])
+        roc_auc[i] = metrics.auc(fpr[i], tpr[i])
+
+    # Compute micro-average ROC curve and ROC area
+    fpr["micro"], tpr["micro"], _ = metrics.roc_curve(y_test.ravel(), test_preds.ravel())
+    roc_auc["micro"] = metrics.auc(fpr["micro"], tpr["micro"])
+
+print("Test Loss: {:.4f}".format(test_loss.item()))
+print("Test micro-average AUC: {:.4f}".format(roc_auc["micro"]))
+
+# Plot ROC curves
+plt.figure(figsize=(8, 6))
+plt.plot(fpr["micro"], tpr["micro"], label=f'micro-average ROC curve (AUC = {roc_auc["micro"]:.2f})', color='deeppink', linestyle=':')
+for i in range(y_test.shape[1]):  # Assuming multi-label classification with y_test having multiple columns
+    plt.plot(fpr[i], tpr[i], label=f'ROC curve (Class {i}, AUC = {roc_auc[i]:.2f})')
+
+plt.plot([0, 1], [0, 1], linestyle='--', color='grey')
+plt.xlabel('False Positive Rate')
+plt.ylabel('True Positive Rate')
+plt.title('Receiver Operating Characteristic (ROC) Curve')
+plt.legend()
+plt.show()
+plt.savefig(f'roc_curve_plot_train_embedding_{train_embedding}_use_pre_trained_gene2vec_{use_pre_trained_gene2vec}.png')
